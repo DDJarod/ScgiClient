@@ -1,5 +1,5 @@
 /* 
-Copyright (C) 2012 Oliver Herdin
+Copyright (C) 2012 Oliver Herdin https://github.com/DDJarod
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of
 this software and associated documentation files (the "Software"), to deal in
@@ -49,24 +49,49 @@ var urlparser = require('url'),
 	SERVER_SOFTWARE_VALUE = "Node/" + process.version
 	;
 	
-
 /**
- * Constructor for a connection. Can bind to TCP or socket scgiserver. Supports the creation of connection
- * arguments thru a function.
+ * Constructor for a connection. Can bind to TCP or socket scgiserver. Supports the creation of connection 
+ * specifications thru a function. The function must return an object like this constructor would expect.
+ * 
+ * @constructor
+ * 
+ * @example
+ * var ScgiClient = require('ScgiClient');
+ * var Connection = new ScgiClient.Connection({socket: '/tmp/my_socket'});
+ * 
+ * @example
+ * var ScgiClient = require('ScgiClient');
+ * var Connection = new ScgiClient.Connection({host: '127.0.0.1', port: 8088});
+ * 
+ * @example
+ * var ScgiClient = require('ScgiClient');
+ * var Connection = new ScgiClient.Connection( function(nr) 
+ * {
+ * 	if (_nr < 10) return null;
+ *  return {socket: '/tmp/my_' + nr + '_socket'};
+ * });
+ * 
+ * @param {ConnectionSpec|function} the specification for a connection, or a function to generate ConnectionSpecs
+ * @param {ConnectionSpec.host} host to connect to
+ * @param {ConnectionSpec.port} port to connect to
+ * @param {ConnectionSpec.socket} path to the socket to use
  */
 var Connection = exports.Connection = function(_connection__function)
 {
+	// used to parse/convert the result of the scgi server
 	this.CGIParser = require('cgi/parser');
 
+	// we will emit an 'end' event, if the request is done
 	events.EventEmitter.call(this);
 	
+	// queues
 	this.waitingRequests = [];
 	this.idleServerConnectors = [];
-	
+
+	// call counter for the connection spec construction function
 	var specCallNr = 1;
 	if ('function' === typeof _connection__function) 
 	{
-		
 		// call the function as long as it does return something
 		do 
 		{
@@ -98,6 +123,12 @@ var Connection = exports.Connection = function(_connection__function)
 //Inherit from events.EventEmitter
 util.inherits(Connection, events.EventEmitter);
 
+/**
+ * handle the request
+ * 
+ * @param {ServerRequest} _req the request
+ * @param {ServerResponse} _res the response
+ */
 Connection.prototype.handle = function(_req, _res)
 {
 	var headers = _req.headers
@@ -106,7 +137,7 @@ Connection.prototype.handle = function(_req, _res)
 	_req.headersBuffer = this.staticHeaderBuffer.clone(2048, 1.25); // the header won't be much larger then 1500 in most cases
 	
 	headers[CONTENT_TYPE_LOWER_CASE] 	&& _req.headersBuffer.append(CONTENT_TYPE).write(0).append(headers[CONTENT_TYPE_LOWER_CASE]).write(0);
-	resParsed.query 					&& _req.headersBuffer.append(QUERY_STRING).write(0).append(resParsed.query).write(0);
+	_req.headersBuffer.append(QUERY_STRING).write(0).append(resParsed.query || '').write(0);
 	_req.connection.remoteAddress 		&& _req.headersBuffer.append(REMOTE_ADDR).write(0).append(_req.connection.remoteAddress).write(0); 
 	_req.headersBuffer	.append(CONTENT_LENGTH).write(0).append(headers[CONTENT_LENGTH_LOWER_CASE] || "0").write(0)
 						.append(PATH_INFO).write(0).append(resParsed.pathname.slice(this.mountPointLength)).write(0)
@@ -127,6 +158,7 @@ Connection.prototype.handle = function(_req, _res)
 
 	// get a idle server connector
 	var serverConnector = this.idleServerConnectors.shift();
+	
 	if (serverConnector)
 	{
 		handleRequest.call(this, _req, _res, serverConnector);
@@ -145,9 +177,9 @@ function handleRequest(_req, _res, _serverConnector)
 	server.on('connect', onServerConnect.bind(server, _req));
 	cgiResult.on('headers', onCgiHeader.bind(cgiResult, _res));
 	
-	server.once('end', function() 
+	server.once('end', function(_noCgiCleanup) 
 	{
-		cgiResult.cleanup();
+		_noCgiCleanup || cgiResult.cleanup();
 		this.emit('end', _req, _serverConnector.id);
 		var waitingRequest = this.waitingRequests.shift();
 		if (waitingRequest)
@@ -160,6 +192,13 @@ function handleRequest(_req, _res, _serverConnector)
 		}
 	}.bind(this));
 	
+	// if the browser closes the connection before the result could be send
+	var endServerFunc = function() {
+		server.emit('end', true);
+	}; 
+	
+	_req.on('close', endServerFunc);
+	_req.on('end', endServerFunc);
 };
 
 function onCgiHeader(_res, _headers)
