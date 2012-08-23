@@ -1,3 +1,4 @@
+[![build status](https://secure.travis-ci.org/DDJarod/ScgiClient.png)](http://travis-ci.org/DDJarod/ScgiClient)
 #ScgiClient for node.js
 
 Yet another scgi client module for node.js. 
