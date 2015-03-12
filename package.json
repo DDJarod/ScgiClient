@@ -1,0 +1,21 @@
+{
+  "author": "Oliver Herdin",
+  "name": "ScgiClient",
+  "description": "Library to connect to a scgi server via host:port or a socket. Also has a loadbalancer included to handle several scgi server in a fifo queue.",
+  "version": "0.1.0",
+  "homepage": "https://github.com/DDJarod/ScgiClient",
+  "repository": {
+    "type" : "git",
+    "url" : "https://github.com/DDJarod/ScgiClient.git"
+  },
+  "engines": {
+    "node": "~0.6.2"
+  },
+  "dependencies": {
+    "DynamicBuffer": "~0.1.0",
+    "cgi": "~0.0.8"
+  },
+  "devDependencies": {},
+  "optionalDependencies": {},
+  "main": "./ScgiClient.js"
+}
